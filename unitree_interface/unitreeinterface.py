@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Union, List, Optional, Callable, Literal
 import threading
-import enum
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber, ChannelPublisher
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowState_, unitree_go_msg_dds__LowCmd_

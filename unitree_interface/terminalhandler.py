@@ -6,11 +6,10 @@ import tty
 import select
 import atexit
 import _thread
-from unitreeinterface import UnitreeInterfaceGO2
 import time
 
 class TerminalHandler:
-    def __init__(self, robot_interface: UnitreeInterfaceGO2):
+    def __init__(self, robot_interface):
         self._fd = sys.stdin.fileno()
         self._orig_termios = termios.tcgetattr(self._fd)
         self.robot_interface = robot_interface
