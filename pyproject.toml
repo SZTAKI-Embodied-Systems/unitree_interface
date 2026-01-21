@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unitree-interface"
+version = "0.1.0"
+description = "Interface for controlling Unitree robots (GO2, H1)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Adam Kovacs", email = "author1@example.com"},
+    {name = "Tamas Gregosits", email = "author2@example.com"}
+]
+
+dependencies = [
+    "unitree-sdk2-py>=0.0.1",
+]
+
+[tool.setuptools]
+packages = ["unitree_interface"]
+
