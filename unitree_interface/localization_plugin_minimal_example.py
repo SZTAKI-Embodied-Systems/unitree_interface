@@ -4,7 +4,7 @@ from unitree_interface.localization import load_plugin
 
 # load localization plugin configuration
 plugin_config_dict = {
-    "localization_plugin": "motioncapture",
+    "localization_plugin": "motioncapture_plugin",
     "localization_timeout_sec": 0.1
 }
 

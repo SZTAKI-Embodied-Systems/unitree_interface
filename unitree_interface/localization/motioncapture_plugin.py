@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.signal import butter, lfilter
 import motioncapture
 
-from dial_mpc.deploy.localization.base_plugin import BaseLocalizationPlugin
+from unitree_interface.localization.base_plugin import BaseLocalizationPlugin
 
 class OptiTrackDemo:
     def __init__(self, optitrack_hostname, optitrack_object_name, optitrack_z_offset):
