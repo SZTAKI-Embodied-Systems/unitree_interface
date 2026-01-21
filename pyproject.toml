@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Adam Kovacs", email = ""},
-    {name = "Tamas Gregosits", email = ""}
+    {name = "adamkovacs2000"},
+    {name = "Tamas Gregosits"}
 ]
 
 dependencies = [
