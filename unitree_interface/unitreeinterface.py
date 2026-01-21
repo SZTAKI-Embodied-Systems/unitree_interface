@@ -77,8 +77,7 @@ class UnitreeInterface(ABC):
         self.interp_targets = InterpTargets()
 
     def CloseConnection(self):
-        self.low_cmd_lock.acquire()
-        self.low_cmd_lock.release()
+        pass
 
 
 @dataclass
@@ -326,9 +325,9 @@ class UnitreeInterfaceGO2(UnitreeInterface):
 
     def CloseConnection(self):
         pass
-        #super().close()
+        #super().CloseConnection()
         #self.StopLowCmdMotorPublishThread()  -->> with this when pressing ctrl-c the robot collapses, implement a graceful shutdown process !!!
-
+        # TODO publish a final posstopf message to stop the robot safely ?????
 
 @dataclass
 class MotorModel:

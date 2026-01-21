@@ -5,11 +5,11 @@ import termios
 import tty
 import select
 import atexit
-import _thread
-import time
+
+from unitree_interface.unitreeinterface import UnitreeInterface
 
 class TerminalHandler:
-    def __init__(self, robot_interface):
+    def __init__(self, robot_interface: UnitreeInterface):
         self._fd = sys.stdin.fileno()
         self._orig_termios = termios.tcgetattr(self._fd)
         self.robot_interface = robot_interface
@@ -18,6 +18,7 @@ class TerminalHandler:
 
         self._thread = threading.Thread(target=self._run, daemon=False)
         self._thread.start()
+        print(f"[TerminalHandler] Started. Press 'q' for emergency stop, Ctrl+C to exit.")
 
     def _run(self):
         tty.setcbreak(self._fd)
@@ -32,7 +33,6 @@ class TerminalHandler:
 
                     elif ch == '\x03':            # Ctrl+C   NOT WORKING AS EXPECTED
                         print('\n Ctrl+C pressed, exiting.')
-                        #_thread.interrupt_main()
                         
         except KeyboardInterrupt:
             print("Terminal handler exiting.")
