@@ -1,4 +1,4 @@
-from unitree_interface import UnitreeInterface, UnitreeInterfaceGO2, UnitreeInterfaceH1
-from terminalhandler import TerminalHandler
+from .unitreeinterface import UnitreeInterface, UnitreeInterfaceGO2
+from .terminalhandler import TerminalHandler
 
-__all__ = []
+__all__ = ["UnitreeInterface", "UnitreeInterfaceGO2", "TerminalHandler"]
