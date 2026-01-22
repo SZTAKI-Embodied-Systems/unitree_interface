@@ -160,6 +160,13 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         self.msc.SetTimeout(5.0)
         self.msc.Init()
 
+        status, result = self.msc.CheckMode()
+        while result['name']:
+            self.sc.StandDown()
+            self.msc.ReleaseMode()
+            status, result = self.msc.CheckMode()
+            time.sleep(1)
+
     def _startLowCmdMotorPublishThread(self):
         self.low_cmd_write_thread = RecurrentThread(
             interval=self.low_cmd_pub_dt,
