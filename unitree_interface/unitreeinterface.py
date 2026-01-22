@@ -97,8 +97,8 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                  low_cmd_pub_dt: float = 0.002):
         super().__init__(network_interface, low_state_callback, low_cmd_pub_dt)
         
-        self.kp_default = [60] * 12
-        self.kd_default = [5] * 12
+        self.kp_default = [60.0] * 12
+        self.kd_default = [5.0] * 12
         self.go2_motor_model = Go2MotorModel()
 
     def Init(self):
@@ -170,6 +170,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
 
     def _stopLowCmdMotorPublishThread(self):
         if self.low_cmd_write_thread is not None:
+            print("[Interface] Stopping low-level command publish thread.")
             self.low_cmd_write_thread.Wait(timeout=1.0)
 
     def _lowStateMessageHandler(self, msg: LowState_GO2):
@@ -184,7 +185,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                                   ):
         ''' Update low-level motor command values'''
         # Convert inputs to lists if they are scalars
-        assert isinstance(q, List, "q must a list of floats")
+        assert isinstance(q, list), "q must a list of floats"
         if isinstance(dq, (int, float)): dq = [dq] * 12
         if isinstance(tau, (int, float)): tau = [tau] * 12
         
@@ -226,7 +227,8 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         if self.use_interp.is_set():
             self._lowCmdMotorUpdateInterpLoop()
 
-        #print(f"Publishing low-level command q: [{self.low_cmd.motor_cmd[0].q}, {self.low_cmd.motor_cmd[1].q}, {self.low_cmd.motor_cmd[2].q}]")
+        #print(f"Publishing low-level command q: {[self.low_cmd.motor_cmd[i].q for i in range(12)]}") # DEBUG
+
         with self.low_cmd_lock:
             self.low_cmd.crc = self.crc.Crc(self.low_cmd)
             self.low_pub.Write(self.low_cmd)
@@ -239,7 +241,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         start_wait = time.time()
         while time.time() - start_wait < 3:
             if self.connected:
-                print("Successfully connected to robot")
+                print("[Interface] Successfully connected to robot")
                 break
         if not self.connected:
             print("[WARNING] No robot state received within timeout, check network interface settings")
@@ -253,21 +255,21 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         self.interp_progress = min(self.interp_progress, 1)
 
         q = [(1 - self.interp_progress) * prev_targets[0][i] + self.interp_progress * next_targets[0][i] for i in range(12)]
-        dq = 0
+        dq = 0.0
         kp = self.kp_default  # ADD kp and kd to interp handling class !!! otherwise it cant be changed here
         kd = self.kd_default
-        tau = 0
+        tau = 0.0
         self.LowCmdMotorUpdateControl(q, dq, tau, kp, kd)
-        #print(f"Interp progress: {self.interp_progress:.3f}", f"{q[:3]}")
+        print(f"Interp progress: {self.interp_progress:.3f}", f"{q[:3]}") # DEBUG 
 
         if self.interp_progress == 1.0 and self.going_init_pos.is_set():
-            print("Reached init target position.")
+            print("[Interface] ]Reached init target position.")
             self.interp_total_step = 10
             self.going_init_pos.clear()
             self.use_interp.clear()
 
         if self.interp_progress == 1.0 and self.going_stopping_pos.is_set():
-            print("Reached stop target position.")
+            print("[Interface] Reached stop target position.")
             self.interp_total_step = 10
             self.use_interp.clear()
             # self.going_stopping_pos.clear()
@@ -299,8 +301,8 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         if keep_still:
             current_q = [ms.q for ms in self.low_state_msg.motor_state]
             
-            self.LowCmdMotorUpdateControl(current_q, 0, 0)
-            print('Starting low-level command control, keeping current position.')
+            self.LowCmdMotorUpdateControl(current_q, 0.0, 0.0)
+            print('[Interface] Starting low-level command control, keeping current position.')
         else:
             if target_q is None:
                 target_q = self.data.pos_standing
@@ -308,7 +310,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
             self.LowCmdMotorUpdateInterpTarget(tar_q=target_q, set_cur_pos_as_target=True)
             self.use_interp.set()
             self.going_init_pos.set()
-            print('Starting low-level command control, interpolating to target position.')
+            print('[Interface] Starting low-level command control, interpolating to target position.')
         
         self._startLowCmdMotorPublishThread() # Start publishing low-level commands after the initial target posion is set
         # RESET INTERP TOTAL STEP TO DEFAULT
@@ -320,13 +322,13 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         self.LowCmdMotorUpdateInterpTarget(tar_q=stop_target_q, set_cur_pos_as_target=True)
         self.use_interp.set()
         self.going_stopping_pos.set()
-        print('Starting stopping process, interpolating to stop position.')
+        print('[Interface] Starting stopping process, interpolating to stop position.')
 
 
     def CloseConnection(self):
-        pass
-        #super().CloseConnection()
-        #self.StopLowCmdMotorPublishThread()  -->> with this when pressing ctrl-c the robot collapses, implement a graceful shutdown process !!!
+        print("[Interface] Closing Unitree Go2 interface connection, stopping low-level command thread.")
+        super().CloseConnection()
+        self._stopLowCmdMotorPublishThread()  # -->> with this when pressing ctrl-c the robot collapses, implement a graceful shutdown process !!!
         # TODO publish a final posstopf message to stop the robot safely ?????
 
 @dataclass

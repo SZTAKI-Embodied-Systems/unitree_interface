@@ -5,6 +5,8 @@ import termios
 import tty
 import select
 import atexit
+import time
+import _thread
 
 from unitree_interface.unitreeinterface import UnitreeInterface
 
@@ -29,13 +31,16 @@ class TerminalHandler:
                     ch = os.read(self._fd, 1).decode()
                     if ch in ('q', 'Q'):
                         self.robot_interface.emergency_event.set()
-                        print("\nEMERGENCY STOP")
-
-                    elif ch == '\x03':            # Ctrl+C   NOT WORKING AS EXPECTED
-                        print('\n Ctrl+C pressed, exiting.')
+                        print("\n[TerminalHandler] EMERGENCY STOP")
+                        
+                    elif ch in ('s', 'S'):
+                        print('\n[TerminalHandler] Stop pressed, closing connection and exiting.')
+                        self.robot_interface.CloseConnection()
+                        time.sleep(1.0)
+                        _thread.interrupt_main() # Raise Interrupt in main thread to exit program
                         
         except KeyboardInterrupt:
-            print("Terminal handler exiting.")
+            print("[TerminalHandler] Terminal handler exiting.")
 
         finally:
             self.restore_terminal()
@@ -45,4 +50,5 @@ class TerminalHandler:
 
     def close(self):
         self._thread.join(timeout=0.2)
+        print("[TerminalHandler] Terminal handler closed.")
         self.restore_terminal()
