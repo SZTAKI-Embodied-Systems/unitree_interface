@@ -164,6 +164,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         while result['name']:
             self.sc.StandDown()
             self.msc.ReleaseMode()
+            print("[Interface] Robot MSC checkmode status: ", status, result)
             status, result = self.msc.CheckMode()
             time.sleep(1)
 
@@ -335,8 +336,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
     def CloseConnection(self):
         print("[Interface] Closing Unitree Go2 interface connection, stopping low-level command thread.")
         super().CloseConnection()
-        self._stopLowCmdMotorPublishThread()  # -->> with this when pressing ctrl-c the robot collapses, implement a graceful shutdown process !!!
-        # TODO publish a final posstopf message to stop the robot safely ?????
+        self._stopLowCmdMotorPublishThread() # Graceful shutdown not working yet
 
 @dataclass
 class MotorModel:
