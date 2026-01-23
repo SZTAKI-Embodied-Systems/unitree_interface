@@ -268,11 +268,11 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         kd = self.kd_default
         tau = 0.0
         self.LowCmdMotorUpdateControl(q, dq, tau, kp, kd)
-        print(f"Interp progress: {self.interp_progress:.3f}", f"{q[:3]}") # DEBUG 
+        # print(f"Interp progress: {self.interp_progress:.3f}", f"{q[:3]}") # DEBUG 
 
         if self.interp_progress == 1.0 and self.going_init_pos.is_set():
             print("[Interface] ]Reached init target position.")
-            self.interp_total_step = 10
+            self.interp_total_step = 40
             self.going_init_pos.clear()
             self.use_interp.clear()
 
@@ -280,6 +280,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
             print("[Interface] Reached stop target position.")
             self.interp_total_step = 10
             self.use_interp.clear()
+            self._stopLowCmdMotorPublishThread()
             # self.going_stopping_pos.clear()
 
 
@@ -296,7 +297,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                     self.interp_targets.set_next_targets(tar_q, [0]*12, [0]*12)
                 self.interp_progress = 0.0
                 
-            elif tar_q and tar_dq and tar_tau: # Set new target pos
+            elif tar_q != None and tar_dq != None and tar_tau != None: # Set new target pos
                 self.interp_targets.shift_targets()
                 self.interp_targets.set_next_targets(tar_q, tar_dq, tar_tau)
                 self.interp_progress = 0.0
@@ -336,7 +337,8 @@ class UnitreeInterfaceGO2(UnitreeInterface):
     def CloseConnection(self):
         print("[Interface] Closing Unitree Go2 interface connection, stopping low-level command thread.")
         super().CloseConnection()
-        self._stopLowCmdMotorPublishThread() # Graceful shutdown not working yet
+        self.StopLowCmdControl()
+        # self._stopLowCmdMotorPublishThread() # Graceful shutdown not working yet
 
 @dataclass
 class MotorModel:
