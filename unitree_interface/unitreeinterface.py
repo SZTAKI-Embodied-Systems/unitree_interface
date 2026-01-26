@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Union, List, Optional, Callable, Literal
 import threading
+import numpy as np
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber, ChannelPublisher
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowState_, unitree_go_msg_dds__LowCmd_
@@ -193,7 +194,9 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                                   ):
         ''' Update low-level motor command values'''
         # Convert inputs to lists if they are scalars
-        assert isinstance(q, list), "q must a list of floats"
+        if not (isinstance(q, list) or isinstance(q, np.ndarray)):
+            print(f"[Interface] LowCmdMotorUpdateControl: q must be a list or numpy array")
+            return
         if isinstance(dq, (int, float)): dq = [dq] * 12
         if isinstance(tau, (int, float)): tau = [tau] * 12
         
