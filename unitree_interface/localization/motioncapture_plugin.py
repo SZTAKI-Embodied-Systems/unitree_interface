@@ -58,7 +58,10 @@ class OptiTrackDemo:
             body = self.mocap.rigidBodies.get(self.optitrack_object_name)
             
             if body is None:
-                print(f"Cannot get the pose of `{self.optitrack_object_name}`.")
+                current_time_error = time.time()
+                if self.last_error_time is None or (current_time_error - self.last_error_time) > 1.0:
+                    self.last_error_time = current_time_error
+                    print(f"Cannot get the pose of:   {self.optitrack_object_name}   (Motioncapture system is active)")
                 return None, None, None
 
             current_time = time.time()
