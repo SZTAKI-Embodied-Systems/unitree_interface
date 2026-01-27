@@ -21,6 +21,8 @@ from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwi
 from unitree_sdk2py.go2.sport.sport_client import SportClient as SportClientGO2
 from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient as LocoClientG1
 
+from unitree_interface.motormodel import Go2MotorModel, G1MotorModel
+
 class InterpTargets:
     def __init__(self):
         self.prev_q = [0.0]*12
@@ -181,7 +183,7 @@ class UnitreeInterfaceDataGO2:
     PosStopF = 2.146e9
     VelStopF = 16000.0
     pos_lying = [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, -0.2, 1.36, -2.65, 0.2, 1.36, -2.65,]
-    pos_standing = [0.0, 0.67, -1.3, 0.0, 0.67, -1.3, 0.0, 0.67, -1.3, 0.0, 0.67, -1.3]
+    q_standing = [0.0, 0.67, -1.3, 0.0, 0.67, -1.3, 0.0, 0.67, -1.3, 0.0, 0.67, -1.3]
 
 class UnitreeInterfaceGO2(UnitreeInterface):
     def __init__(self,
@@ -190,9 +192,10 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                  low_cmd_pub_dt: float = 0.002):
         super().__init__(network_interface, low_state_callback, low_cmd_pub_dt)
         
-        self.kp_default = [60.0] * 12
-        self.kd_default = [5.0] * 12
-        self.go2_motor_model = Go2MotorModel()
+        self.total_joint_num = 12
+        self.kp_default = [60.0] * self.total_joint_num
+        self.kd_default = [5.0] * self.total_joint_num
+        self.motor_model = Go2MotorModel()
 
     def Init(self):
         ''' Initialize the Unitree Go2 interface components 
@@ -251,30 +254,23 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         if not (isinstance(q, list) or isinstance(q, np.ndarray)):
             print(f"[Interface] LowCmdMotorUpdateControl: q must be a list or numpy array")
             return
-        if isinstance(dq, (int, float)): dq = [dq] * 12
-        if isinstance(tau, (int, float)): tau = [tau] * 12
+        if isinstance(dq, (int, float)): dq = [dq] * self.total_joint_num
+        if isinstance(tau, (int, float)): tau = [tau] * self.total_joint_num
         
         if kp is None:
             kp = self.kp_default
         elif isinstance(kp, (int, float)):
-            kp = [kp] * 12
+            kp = [kp] * self.total_joint_num
         if kd is None:
             kd = self.kd_default
         elif isinstance(kd, (int, float)):
-            kd = [kd] * 12
-        
-        min_q   = self.go2_motor_model.get_vec_var("min_position")
-        max_q   = self.go2_motor_model.get_vec_var("max_position")
-        min_dq  = self.go2_motor_model.get_vec_var("min_velocity")
-        max_dq  = self.go2_motor_model.get_vec_var("max_velocity")
-        min_tau = self.go2_motor_model.get_vec_var("min_torque")
-        max_tau = self.go2_motor_model.get_vec_var("max_torque")
+            kd = [kd] * self.total_joint_num
 
         with self.low_cmd_lock:
-            for i in range(12):
-                self.low_cmd.motor_cmd[i].q = self._clampVariable(q[i], min_q[i], max_q[i])
-                self.low_cmd.motor_cmd[i].dq = self._clampVariable(dq[i], min_dq[i], max_dq[i])
-                self.low_cmd.motor_cmd[i].tau = self._clampVariable(tau[i], min_tau[i], max_tau[i])
+            for i in range(self.total_joint_num):
+                self.low_cmd.motor_cmd[i].q = self._clampVariable(q[i], self.motor_model.min_position_list[i], self.motor_model.max_position_list[i])
+                self.low_cmd.motor_cmd[i].dq = self._clampVariable(dq[i], self.motor_model.min_velocity_list[i], self.motor_model.max_velocity_list[i])
+                self.low_cmd.motor_cmd[i].tau = self._clampVariable(tau[i], self.motor_model.min_torque_list[i], self.motor_model.max_torque_list[i])
 
                 self.low_cmd.motor_cmd[i].kp = kp[i]
                 self.low_cmd.motor_cmd[i].kd = kd[i]
@@ -356,7 +352,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
             print('[Interface] Starting low-level command control, keeping current position.')
         else:
             if target_q is None:
-                target_q = self.data.pos_standing
+                target_q = self.data.q_standing
             self.interp_total_step = 600
             self.LowCmdMotorUpdateInterpTarget(tar_q=target_q, set_cur_pos_as_target=True)
             self.use_interp.set()
@@ -384,12 +380,29 @@ class UnitreeInterfaceGO2(UnitreeInterface):
 
 @dataclass
 class UnitreeInterfaceDataG1:
-    MODE_PR = 0 # Series Control for Pitch/Roll Joints
+    """ PR Mode: Controls the Pitch (P) and Roll (R) motors of the ankle joint (default mode, corresponding to the URDF model).
+        AB Mode: Directly controls the A and B motors of the ankle joint (requires users to calculate the parallel mechanism kinematics themselves). """
+    MODE_PR = 0 # Series Control for Pitch/Roll Joints (default)
     MODE_AB = 1 # Parallel Control for A/B Joints
-    MODE_MACHINE = None # G1 Type：4：23-Dof;5:29-Dof;6:27-Dof(29Dof Fitted at the waist)
+    # MODE_MACHINE: G1 Type：4：23-Dof;5:29-Dof;6:27-Dof(29Dof Fitted at the waist)
+    MODE_MACHINE_DOF_DICT = {4:23, 5:29, 6:27}
     PosStopF = 2.146e9
     VelStopF = 16000.0
-    pos_standing = []
+    # q_standing = [                    # Standing pose with slightly bent arms and legs
+    #     -0.1, 0, 0, 0.3, -0.2, 0,     # left leg
+    #     -0.1, 0, 0, 0.3, -0.2, 0,     # right leg
+    #     0, 0, 0,                      # waist
+    #     0.2,  0.2, 0, 1.28, 0, 0, 0,  # left arm
+    #     0.2, -0.2, 0, 1.28, 0, 0, 0   # right arm
+    #     ]
+    q_standing = [              # Standing pose with straight arms and legs
+        0, 0, 0, 0, 0, 0,       # left leg
+        0, 0, 0, 0, 0, 0,       # right leg
+        0, 0, 0,                # waist
+        0, 0, 0, 1.1, 0, 0, 0,  # left arm
+        0, 0, 0, 1.1, 0, 0, 0   # right arm
+        ]
+    
 
 class UnitreeInterfaceG1(UnitreeInterface):
     def __init__(self,
@@ -398,21 +411,26 @@ class UnitreeInterfaceG1(UnitreeInterface):
                  low_cmd_pub_dt: float = 0.002):
         super().__init__(network_interface, low_state_callback, low_cmd_pub_dt)
         
+        self.total_joint_num = 29
+        self.motor_ids = list(range(self.total_joint_num))
+        # used_motor_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 22, 23, 24, 25]
+
+        # The waist roll and pitch are zeroed because the joint is physically locked)
         self.kp_default = [
+            60, 60, 60, 100, 40, 400,      # legs
             60, 60, 60, 100, 40, 40,      # legs
-            60, 60, 60, 100, 40, 40,      # legs
-            60, 40, 40,                   # waist
+            60, 0, 0,                     # waist (yaw, roll, pitch, default: (60,40,40))
             40, 40, 40, 40,  40, 40, 40,  # arms
             40, 40, 40, 40,  40, 40, 40   # arms
         ]
         self.kd_default = [
             1, 1, 1, 2, 1, 1,     # legs
             1, 1, 1, 2, 1, 1,     # legs
-            1, 1, 1,              # waist
+            1, 0, 0,              # waist (yaw, roll, pitch, default: (1,1,1))
             1, 1, 1, 1, 1, 1, 1,  # arms
             1, 1, 1, 1, 1, 1, 1   # arms
         ]
-        self.g1_motor_model = G1MotorModel()
+        self.motor_model = G1MotorModel()
 
     def Init(self):
         ''' Initialize the Unitree G1 interface components 
@@ -444,9 +462,9 @@ class UnitreeInterfaceG1(UnitreeInterface):
         ''' Initialize the low-level command message with default values
             (stop motors and keep position) '''
         self.low_cmd = unitree_hg_msg_dds__LowCmd_()
-        self.low_cmd.mode_pr = self.data.MODE_AB # Parellel Control for A/B Joints
+        self.low_cmd.mode_pr = self.data.MODE_PR # Series Control for Pitch/Roll Joints (default)
         self.low_cmd.mode_machine = None         # Set on first incoming message
-        for i in range(29):
+        for i in range(self.total_joint_num):
             self.low_cmd.motor_cmd[i].mode = 0x01  # (PMSM) mode
             self.low_cmd.motor_cmd[i].q= self.data.PosStopF
             self.low_cmd.motor_cmd[i].kp = 0
@@ -459,46 +477,111 @@ class UnitreeInterfaceG1(UnitreeInterface):
         self.lc.SetTimeout(5.0)
         self.lc.Init()
 
+    def _internalLowStateCallback(self, msg: LowState_G1):
+        """Internal callback that executes class logic before user callback"""
+        self.low_state_msg = msg
+
+        # Check connection status on first message
+        if not self.connected:
+            self.connected = True
+            self.mode_machine = self.low_state_msg.mode_machine # Set machine mode on first message
+            print(f"[Interface] G1 Machine Mode: {self.mode_machine}, DOF: {self.data.MODE_MACHINE_DOF_DICT.get(self.mode_machine, 'MODE_MACHINE not recognized')}")
+            print(f"[Interface] G1 q: {[self.low_state_msg.motor_state[i].q for i in range(len(self.low_state_msg.motor_state))]}")
+
+        # Call the external low state message handler
+        if self.low_state_callback is not None:
+            self.low_state_callback()
+        else:
+            print("[Interface] No low state callback function provided.")
+
     # TODO move to parent class
     def LowCmdMotorUpdateControl(self,
                                   q: List[float], 
                                   dq: Union[float, List[float]], 
                                   tau: Union[float, List[float]],
                                   kp: Union[float, List[float]] = None, 
-                                  kd: Union[float, List[float]] = None
+                                  kd: Union[float, List[float]] = None,
+                                  motor_ids: Optional[List[int]] = None
                                   ):
-        ''' Update low-level motor command values'''
+        ''' Update low-level motor command values
+        
+        Args:
+            q: Target positions (must match length of motor_ids if provided)
+            dq: Target velocities (scalar or list)
+            tau: Target torques (scalar or list)
+            kp: Position gains (scalar or list, uses defaults if None)
+            kd: Velocity gains (scalar or list, uses defaults if None)
+            motor_ids: Optional list of motor indices to update. If None, controls all motors.
+        '''
+        # Determine which motors to control
+        if motor_ids is None:
+            motor_ids = self.motor_ids
+        
+        num_used_motors = len(motor_ids)
+
         # Convert inputs to lists if they are scalars
         if not (isinstance(q, list) or isinstance(q, np.ndarray)):
             print(f"[Interface] LowCmdMotorUpdateControl: q must be a list or numpy array")
             return
-        if isinstance(dq, (int, float)): dq = [dq] * 12
-        if isinstance(tau, (int, float)): tau = [tau] * 12
+        if len(q) != num_used_motors:
+            print(f"[Interface] LowCmdMotorUpdateControl: q length ({len(q)}) must match motor_ids length ({num_used_motors})")
+            return
+        
+        if isinstance(dq, (int, float)): dq = [dq] * num_used_motors
+        if isinstance(tau, (int, float)): tau = [tau] * num_used_motors
         
         if kp is None:
-            kp = self.kp_default
-        elif isinstance(kp, (int, float)):
-            kp = [kp] * 12
+            kp = [self.kp_default[i] for i in motor_ids]
         if kd is None:
-            kd = self.kd_default
-        elif isinstance(kd, (int, float)):
-            kd = [kd] * 12
-        
-        min_q   = self.go2_motor_model.get_vec_var("min_position")
-        max_q   = self.go2_motor_model.get_vec_var("max_position")
-        min_dq  = self.go2_motor_model.get_vec_var("min_velocity")
-        max_dq  = self.go2_motor_model.get_vec_var("max_velocity")
-        min_tau = self.go2_motor_model.get_vec_var("min_torque")
-        max_tau = self.go2_motor_model.get_vec_var("max_torque")
+            kd = [self.kd_default[i] for i in motor_ids]
 
         with self.low_cmd_lock:
-            for i in range(12):
-                self.low_cmd.motor_cmd[i].q = self._clampVariable(q[i], min_q[i], max_q[i])
-                self.low_cmd.motor_cmd[i].dq = self._clampVariable(dq[i], min_dq[i], max_dq[i])
-                self.low_cmd.motor_cmd[i].tau = self._clampVariable(tau[i], min_tau[i], max_tau[i])
+            for i, motor_id in enumerate(motor_ids):
+                self.low_cmd.motor_cmd[motor_id].q = self._clampVariable(q[i], self.motor_model.min_position_list[motor_id], self.motor_model.max_position_list[motor_id])
+                self.low_cmd.motor_cmd[motor_id].dq = self._clampVariable(dq[i], self.motor_model.min_velocity_list[motor_id], self.motor_model.max_velocity_list[motor_id])
+                self.low_cmd.motor_cmd[motor_id].tau = self._clampVariable(tau[i], self.motor_model.min_torque_list[motor_id], self.motor_model.max_torque_list[motor_id])
 
-                self.low_cmd.motor_cmd[i].kp = kp[i]
-                self.low_cmd.motor_cmd[i].kd = kd[i]
+                self.low_cmd.motor_cmd[motor_id].kp = kp[i]
+                self.low_cmd.motor_cmd[motor_id].kd = kd[i]
+
+    def LowCmdMotorSetUnusedToDefault(self, 
+                                      used_motor_ids: Optional[List[int]] = None,
+                                      default_q: Optional[List[float]] = None):
+        ''' Set unused motor joints to default/safe positions with default gains
+        
+        Args:
+            used_motor_ids: List of motor IDs that are being actively controlled
+            default_q: Optional list of default positions for all motors. 
+                      If None, uses current position for unused motors.
+        '''
+        if used_motor_ids is None:
+            used_motor_ids = self.motor_ids
+
+        all_motor_ids = list(range(self.total_joint_num))
+        unused_motor_ids = [i for i in all_motor_ids if i not in used_motor_ids]
+        
+        if len(unused_motor_ids) == 0:
+            return
+        
+        # Get default positions for unused motors
+        if default_q is None:
+            # Use current positions
+            q_unused = [self.low_state_msg.motor_state[i].q for i in unused_motor_ids]
+            print(f"[Interface] Setting unused motors {unused_motor_ids} to current positions.")
+        else:
+            q_unused = [default_q[i] for i in unused_motor_ids]
+            print(f"[Interface] Setting unused motors {unused_motor_ids} to provided default positions.")
+        
+        # Set unused motors to default position with zero velocity/torque
+        self.LowCmdMotorUpdateControl(
+            q=q_unused,
+            dq=0.0,
+            tau=0.0,
+            kp=None,  # Use default kp
+            kd=None,  # Use default kd
+            motor_ids=unused_motor_ids
+        )
+
 
     # TODO move to parent class
     def _lowCmdWrite(self):
@@ -576,7 +659,7 @@ class UnitreeInterfaceG1(UnitreeInterface):
             print('[Interface] Starting low-level command control, keeping current position.')
         else:
             if target_q is None:
-                target_q = self.data.pos_standing
+                target_q = self.data.q_standing
             self.interp_total_step = 600
             self.LowCmdMotorUpdateInterpTarget(tar_q=target_q, set_cur_pos_as_target=True)
             self.use_interp.set()
@@ -602,205 +685,10 @@ class UnitreeInterfaceG1(UnitreeInterface):
         self.StopLowCmdControl()
         # self._stopLowCmdMotorPublishThread() # Graceful shutdown not working yet
 
-
-
-
-
-
-
-
-
-
-
-@dataclass
-class MotorModel:
-    """Unitree motor model for storing motor limits"""
-    def __init__(
-      self,
-      name: Optional[str] = None,
-      min_position: float = 0.0,
-      max_position: float = 0.0,
-      min_velocity: float = 0.0,
-      max_velocity: float = 0.0,
-      min_torque: float = 0.0,
-      max_torque: float = 0.0,) -> None:
-
-        self.name = name
-        self.min_position = min_position
-        self.max_position = max_position
-        self.min_velocity = min_velocity
-        self.max_velocity = max_velocity
-        self.min_torque = min_torque
-        self.max_torque = max_torque
-
-
-@dataclass
-class Go2MotorModel(MotorModel):
-    """Go2 robot model for real applications"""
-    def __init__(self):
-        self.motors = [
-            MotorModel(
-                name="FR_hip_joint",
-                min_position=-1.05,
-                max_position=1.05,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="FR_thigh_joint",
-                min_position=-1.57,
-                max_position=3.49,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="FR_calf_joint",
-                min_position=-2.818,
-                max_position=-0.838,
-                min_velocity=-20,
-                max_velocity=20,
-                min_torque=-45.4,
-                max_torque=45.4,
-            ),
-            MotorModel(
-                name="FL_hip_joint",
-                min_position=-1.05,
-                max_position=1.05,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="FL_thigh_joint",
-                min_position=-1.57,
-                max_position=3.49,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="FL_calf_joint",
-                min_position=-2.818,
-                max_position=-0.838,
-                min_velocity=-20,
-                max_velocity=20,
-                min_torque=-45.4,
-                max_torque=45.4,
-            ),
-            MotorModel(
-                name="RR_hip_joint",
-                min_position=-1.05,
-                max_position=1.05,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="RR_thigh_joint",
-                min_position=-0.524,
-                max_position=4.54,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="RR_calf_joint",
-                min_position=-2.818,
-                max_position=-0.838,
-                min_velocity=-20,
-                max_velocity=20,
-                min_torque=-45.4,
-                max_torque=45.4,
-            ),
-            MotorModel(
-                name="RL_hip_joint",
-                min_position=-1.05,
-                max_position=1.05,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="RL_thigh_joint",
-                min_position=-0.524,
-                max_position=4.54,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            ),
-            MotorModel(
-                name="RL_calf_joint",
-                min_position=-2.818,
-                max_position=-0.838,
-                min_velocity=-20,
-                max_velocity=20,
-                min_torque=-45.4,
-                max_torque=45.4,
-            )]
-    
-    def get_vec_var(self, var_name: Literal["name", "min_position", "max_position", "min_velocity", "max_velocity", "min_torque", "max_torque"]):
-        return [getattr(motor, var_name) for motor in self.motors]
-
-@dataclass
-class G1MotorModel(MotorModel):
-    """Go2 robot model for real applications"""
-    def __init__(self):
-        self.motors = [
-            MotorModel(
-                name="FR_hip_joint",
-                min_position=-1.05,
-                max_position=1.05,
-                min_velocity=-30,
-                max_velocity=30,
-                min_torque=-23.7,
-                max_torque=23.7,
-            )]
-
-class G1JointIndex:
-    LeftHipPitch = 0
-    LeftHipRoll = 1
-    LeftHipYaw = 2
-    LeftKnee = 3
-    LeftAnklePitch = 4
-    LeftAnkleB = 4
-    LeftAnkleRoll = 5
-    LeftAnkleA = 5
-    RightHipPitch = 6
-    RightHipRoll = 7
-    RightHipYaw = 8
-    RightKnee = 9
-    RightAnklePitch = 10
-    RightAnkleB = 10
-    RightAnkleRoll = 11
-    RightAnkleA = 11
-    WaistYaw = 12
-    WaistRoll = 13        # NOTE: INVALID for g1 23dof/29dof with waist locked
-    WaistA = 13           # NOTE: INVALID for g1 23dof/29dof with waist locked
-    WaistPitch = 14       # NOTE: INVALID for g1 23dof/29dof with waist locked
-    WaistB = 14           # NOTE: INVALID for g1 23dof/29dof with waist locked
-    LeftShoulderPitch = 15
-    LeftShoulderRoll = 16
-    LeftShoulderYaw = 17
-    LeftElbow = 18
-    LeftWristRoll = 19
-    LeftWristPitch = 20   # NOTE: INVALID for g1 23dof
-    LeftWristYaw = 21     # NOTE: INVALID for g1 23dof
-    RightShoulderPitch = 22
-    RightShoulderRoll = 23
-    RightShoulderYaw = 24
-    RightElbow = 25
-    RightWristRoll = 26
-    RightWristPitch = 27  # NOTE: INVALID for g1 23dof
-    RightWristYaw = 28    # NOTE: INVALID for g1 23dof
-
-
+    def SetUsedMotorIds(self, used_motor_id_list: List[int]):
+        """ Set the list of used motor IDs for the G1 robot.
+            This affects which motors are actively controlled and which are set to default positions.
+        Args:
+            used_motor_id_list: List of motor indices that are actively controlled.
+        """
+        self.motor_ids = used_motor_id_list
