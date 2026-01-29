@@ -321,7 +321,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
 
         if self.interp_progress == 1.0 and self.going_init_pos.is_set():
             print("[Interface] Reached init target position.")
-            self.interp_total_step = 40
+            self.interp_total_step = 10
             self.going_init_pos.clear()
             self.use_interp.clear()
 
@@ -346,7 +346,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                     self.interp_targets.set_next_targets(tar_q, [0]*self.total_joint_num, [0]*self.total_joint_num)
                 self.interp_progress = 0.0
                 
-            elif tar_q != None and tar_dq != None and tar_tau != None: # Set new target pos
+            elif tar_q is not None and tar_dq is not None and tar_tau is not None: # Set new target pos
                 self.interp_targets.shift_targets()
                 self.interp_targets.set_next_targets(tar_q, tar_dq, tar_tau)
                 self.interp_progress = 0.0
@@ -646,7 +646,7 @@ class UnitreeInterfaceG1(UnitreeInterface):
 
         if self.interp_progress == 1.0 and self.going_init_pos.is_set():
             print("[Interface] Reached init target position.")
-            self.interp_total_step = 40
+            self.interp_total_step = 10
             self.going_init_pos.clear()
             self.use_interp.clear()
 
@@ -672,11 +672,10 @@ class UnitreeInterfaceG1(UnitreeInterface):
                     self.interp_targets.set_next_targets(tar_q, [0]*controlled_motor_num, [0]*controlled_motor_num)
                 self.interp_progress = 0.0
                 
-            elif tar_q != None and tar_dq != None and tar_tau != None: # Set new target pos
+            elif tar_q is not None and tar_dq is not None and tar_tau is not None: # Set new target pos
                 self.interp_targets.shift_targets()
                 self.interp_targets.set_next_targets(tar_q, tar_dq, tar_tau)
                 self.interp_progress = 0.0
-
     # TODO adapt to G1
     def StartLowCmdControl(self, keep_still:bool = True,
                            target_pose:str = None,
