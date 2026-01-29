@@ -52,6 +52,8 @@ class OptiTrackDemo:
             self.state_shm = shared_memory.SharedMemory(name=self.shared_mem_name, create=False)
         self.state_buffer = self.state_shm.buf
 
+        self.last_error_time = None
+
     def get_optitrack_data(self):
         try:
             self.mocap.waitForNextFrame()
