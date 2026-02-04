@@ -95,7 +95,8 @@ class UnitreeInterface(ABC):
                                  dq: Union[float, List[float]], 
                                  tau: Union[float, List[float]],
                                  kp: Union[float, List[float]] = None, 
-                                 kd: Union[float, List[float]] = None
+                                 kd: Union[float, List[float]] = None,
+                                 force_update: bool = False
                                  ):
         ''' Update low-level motor command values'''
         pass
@@ -193,7 +194,7 @@ class UnitreeInterfaceDataGO2:
     TRIGERLEVEL = 0xF0
     PosStopF = 2.146e9
     VelStopF = 16000.0
-    pos_lying = [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, -0.2, 1.36, -2.65, 0.2, 1.36, -2.65,]
+    q_lying = [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, -0.2, 1.36, -2.65, 0.2, 1.36, -2.65,]
     q_standing = [0.0, 0.67, -1.3, 0.0, 0.67, -1.3, 0.0, 0.67, -1.3, 0.0, 0.67, -1.3]
 
 class UnitreeInterfaceGO2(UnitreeInterface):
@@ -254,13 +255,19 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         self.sc.Init()
 
     def LowCmdMotorUpdateControl(self,
-                                  q: List[float], 
-                                  dq: Union[float, List[float]], 
-                                  tau: Union[float, List[float]],
-                                  kp: Union[float, List[float]] = None, 
-                                  kd: Union[float, List[float]] = None
-                                  ):
+                                 q: List[float], 
+                                 dq: Union[float, List[float]], 
+                                 tau: Union[float, List[float]],
+                                 kp: Union[float, List[float]] = None, 
+                                 kd: Union[float, List[float]] = None,
+                                 force_update: bool = False
+                                 ):
         ''' Update low-level motor command values'''
+        # Prevent updates during init/stop interpolation unless forced
+        if not force_update and (self.going_init_pos.is_set() or self.going_stopping_pos.is_set()):
+            print("[Interface] LowCmdMotorUpdateControl: Ignoring command update while in init or stopping interpolation.")
+            return
+        
         # Convert inputs to lists if they are scalars
         if not (isinstance(q, list) or isinstance(q, np.ndarray)):
             print(f"[Interface] LowCmdMotorUpdateControl: q must be a list or numpy array")
@@ -316,7 +323,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         kp = self.kp_default  # ADD kp and kd to interp handling class !!! otherwise it cant be changed here
         kd = self.kd_default
         tau = 0.0
-        self.LowCmdMotorUpdateControl(q, dq, tau, kp, kd)
+        self.LowCmdMotorUpdateControl(q, dq, tau, kp, kd, force_update=True)
         # print(f"Interp progress: {self.interp_progress:.3f}", f"{q[:3]}") # DEBUG 
 
         if self.interp_progress == 1.0 and self.going_init_pos.is_set():
@@ -340,10 +347,10 @@ class UnitreeInterfaceGO2(UnitreeInterface):
             if set_cur_pos_as_target: # Initialize interpolation targets
                 current_q = [ms.q for ms in self.low_state_msg.motor_state]
                 self.interp_targets.set_prev_targets(current_q, [0] * self.total_joint_num, [0] * self.total_joint_num) # if first run set current pos as prev pos
-                if not tar_q:
+                if tar_q is None:
                     self.interp_targets.set_next_targets(current_q, [0] * self.total_joint_num, [0] * self.total_joint_num) # if no target pos given set current pos as target pos
                 else: 
-                    self.interp_targets.set_next_targets(tar_q, [0]*self.total_joint_num, [0]*self.total_joint_num)
+                    self.interp_targets.set_next_targets(tar_q, [0]*self.total_joint_num, [0]*self.total_joint_num) # set given target pos
                 self.interp_progress = 0.0
                 
             elif tar_q is not None and tar_dq is not None and tar_tau is not None: # Set new target pos
@@ -352,8 +359,8 @@ class UnitreeInterfaceGO2(UnitreeInterface):
                 self.interp_progress = 0.0
 
  
-    def StartLowCmdControl(self, keep_still:bool = False,
-                           target_pose:str = None,
+    def StartLowCmdControl(self,
+                           keep_still:bool = True,
                            target_q: list = None):
         ''' Start the low-level command control thread while keeping the robot in current position or interpolating to target position '''
         if keep_still:
@@ -376,7 +383,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
     def StopLowCmdControl(self, stop_target_q: list = None):
         print("[Interface] Stopping low-level command control, interpolating to stop position.")
         if stop_target_q is None:
-            stop_target_q = self.data.pos_lying
+            stop_target_q = self.data.q_lying
         self.interp_total_step = 600
         self.LowCmdMotorUpdateInterpTarget(tar_q=stop_target_q, set_cur_pos_as_target=True)
         self.use_interp.set()
@@ -517,6 +524,7 @@ class UnitreeInterfaceG1(UnitreeInterface):
                                   tau: Union[float, List[float]],
                                   kp: Union[float, List[float]] = None, 
                                   kd: Union[float, List[float]] = None,
+                                  force_update: bool = False,
                                   override_controlled_motor_ids: Optional[List[int]] = None
                                   ):
         ''' Update low-level motor command values (for controlled motors by default, or override with specific motor IDs)
@@ -527,9 +535,15 @@ class UnitreeInterfaceG1(UnitreeInterface):
             tau: Target torques (scalar or list)
             kp: Position gains (scalar or list, uses defaults if None)
             kd: Velocity gains (scalar or list, uses defaults if None)
+            force_update: If True, allows updates during init/stop interpolation
             override_controlled_motor_ids: Optional list of motor indices to update.
                                             If None uses the currently set controlled_motor_ids. Does not override the class variable.
         '''
+        # Prevent updates during init/stop interpolation unless forced
+        if not force_update and (self.going_init_pos.is_set() or self.going_stopping_pos.is_set()):
+            print("[Interface] LowCmdMotorUpdateControl: Ignoring command update while in init or stopping interpolation.")
+            return
+
         # Determine which motors to control
         if override_controlled_motor_ids is None:
             motor_ids_to_update = self.controlled_motor_ids
@@ -609,6 +623,7 @@ class UnitreeInterfaceG1(UnitreeInterface):
             tau=0.0,
             kp=None,  # Use default kp
             kd=None,  # Use default kd
+            force_update=True,
             override_controlled_motor_ids=uncontrolled_motor_ids
         )
 
@@ -641,7 +656,7 @@ class UnitreeInterfaceG1(UnitreeInterface):
         kp = self.kp_default  # ADD kp and kd to interp handling class !!! otherwise it cant be changed here
         kd = self.kd_default
         tau = 0.0
-        self.LowCmdMotorUpdateControl(q, dq, tau, kp, kd)
+        self.LowCmdMotorUpdateControl(q, dq, tau, kp, kd, force_update=True)
         # print(f"Interp progress: {self.interp_progress:.3f}", f"{q[:3]}") # DEBUG 
 
         if self.interp_progress == 1.0 and self.going_init_pos.is_set():
