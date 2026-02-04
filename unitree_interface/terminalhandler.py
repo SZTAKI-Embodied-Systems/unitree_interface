@@ -32,6 +32,7 @@ class TerminalHandler:
                     if ch in ('q', 'Q'):
                         self.robot_interface.emergency_event.set()
                         print("\n[TerminalHandler] EMERGENCY STOP")
+                        _thread.interrupt_main() # Raise Interrupt in main thread to exit program
                         
                     elif ch in ('s', 'S'):
                         print('\n[TerminalHandler] Stop pressed, closing connection and exiting.')
