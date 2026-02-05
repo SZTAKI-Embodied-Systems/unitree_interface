@@ -15,6 +15,7 @@ class TerminalHandler:
         self._fd = sys.stdin.fileno()
         self._orig_termios = termios.tcgetattr(self._fd)
         self.robot_interface = robot_interface
+        self.interrupt_main_sent = False
 
         atexit.register(self.restore_terminal)
 
@@ -32,13 +33,18 @@ class TerminalHandler:
                     if ch in ('q', 'Q'):
                         self.robot_interface.emergency_event.set()
                         print("\n[TerminalHandler] EMERGENCY STOP")
-                        _thread.interrupt_main() # Raise Interrupt in main thread to exit program
+                        if not self.interrupt_main_sent:
+                            self.interrupt_main_sent = True
+                            time.sleep(1.0)
+                            _thread.interrupt_main() # Raise Interrupt in main thread to exit program
                         
                     elif ch in ('s', 'S'):
                         print('\n[TerminalHandler] Stop pressed, closing connection and exiting.')
                         self.robot_interface.CloseConnection()
-                        time.sleep(1.0)
-                        _thread.interrupt_main() # Raise Interrupt in main thread to exit program
+                        if not self.interrupt_main_sent:
+                            self.interrupt_main_sent = True
+                            time.sleep(1.0)
+                            _thread.interrupt_main() # Raise Interrupt in main thread to exit program
                         
         except KeyboardInterrupt:
             print("[TerminalHandler] Terminal handler exiting.")
