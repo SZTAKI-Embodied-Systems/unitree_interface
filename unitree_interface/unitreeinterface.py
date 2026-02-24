@@ -217,6 +217,7 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         super().__init__(network_interface, low_state_callback, low_cmd_pub_dt)
         
         self.total_joint_num = 12
+        self.controlled_motor_ids = list(range(self.total_joint_num))
         self.kp_default = [60.0] * self.total_joint_num
         self.kd_default = [5.0] * self.total_joint_num
         self.motor_model = Go2MotorModel()
