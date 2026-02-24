@@ -186,6 +186,18 @@ class UnitreeInterface(ABC):
             print(f"tau:{self.low_cmd.motor_cmd[i].tau:.3f} kp:{self.low_cmd.motor_cmd[i].kp} kd:{self.low_cmd.motor_cmd[i].kd}", sep="")
         #print([self.low_cmd.motor_cmd[i].q for i in range(self.total_joint_num)]) # DEBUG
 
+    def getLowStateJointPos(self):
+        ''' Get current joint positions from low state message '''
+        return [self.low_state_msg.motor_state[i].q for i in range(self.total_joint_num)]
+    
+    def getLowStateJointVel(self):
+        ''' Get current joint velocities from low state message '''
+        return [self.low_state_msg.motor_state[i].dq for i in range(self.total_joint_num)]
+    
+    def getLowStateImuGyroscope(self):
+        ''' Get current IMU gyroscope data from low state message '''
+        return np.array([self.low_state_msg.imu_state.gyroscope])
+
 
 @dataclass
 class UnitreeInterfaceDataGO2:
@@ -463,7 +475,7 @@ class UnitreeInterfaceG1(UnitreeInterface):
         self._initLowSub(LowState_G1)  # Initialize low state subscriber
         self._initLowPub(LowCmd_G1)    # Initialize low cmd publisher
         
-        self.low_state = unitree_hg_msg_dds__LowState_()
+        self.low_state = unitree_hg_msg_dds__LoewState_()
         self.low_cmd_write_thread = None
 
         try:
