@@ -742,6 +742,15 @@ class UnitreeInterfaceG1(UnitreeInterface):
         print('[Interface] Starting stopping process, interpolating to stop position.')
 
 
+    def getLowStateJointPos(self):
+        ''' Get current controlled joint positions from low state message '''
+        return [self.low_state_msg.motor_state[i].q for i in self.controlled_motor_ids]
+    
+    def getLowStateJointVel(self):
+        ''' Get current controlled joint velocities from low state message '''
+        return [self.low_state_msg.motor_state[i].dq for i in self.controlled_motor_ids]
+
+
     def CloseConnection(self):
         super().CloseConnection()
         self.StopLowCmdControl()
