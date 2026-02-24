@@ -196,7 +196,7 @@ class UnitreeInterface(ABC):
     
     def getLowStateImuGyroscope(self):
         ''' Get current IMU gyroscope data from low state message '''
-        return np.array([self.low_state_msg.imu_state.gyroscope])
+        return np.array([self.low_state_msg.imu_state.gyroscope]).flatten()
 
 
 @dataclass
