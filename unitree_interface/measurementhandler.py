@@ -99,7 +99,7 @@ class MeasurementHandler:
     def get_raw_state_dq(self):
         return self.raw_state_dq
 
-    def get_raw_control_u(self):
+    def get_raw_state_u(self):
         return self.raw_control_u
 
     def get_filtered_state_q(self):
