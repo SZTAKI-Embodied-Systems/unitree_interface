@@ -3,11 +3,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Union, List, Optional, Callable, Literal
 import threading
+from click import command
 import numpy as np
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber, ChannelPublisher
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowState_, unitree_go_msg_dds__LowCmd_
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_, unitree_hg_msg_dds__LowState_
+from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_ as LowState_GO2
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_ as LowCmd_GO2
@@ -408,6 +410,19 @@ class UnitreeInterfaceGO2(UnitreeInterface):
         self.use_interp.set()
         self.going_stopping_pos.set()
         print('[Interface] Starting stopping process, interpolating to stop position.')
+
+    def SetLidarPowerState(command: Literal['ON', 'OFF']):
+        if command not in ['ON', 'OFF']:
+            print(f"[Interface] Invalid command for SetLidarPowerState: {command}. Must be 'ON' or 'OFF'.")
+            return
+        topic = "rt/utlidar/switch"
+        publisher = ChannelPublisher(topic, String_)
+        publisher.Init()
+        msg = String_(command)
+        print(f"[Interface] Publishing command '{command}' to {topic}...")
+        publisher.Write(msg)
+        time.sleep(0.1)
+        publisher.Close()
 
     def CloseConnection(self):
         super().CloseConnection()
