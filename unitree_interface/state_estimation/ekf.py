@@ -51,7 +51,7 @@ def _quat_to_small_angle(quat_wxyz: np.ndarray) -> np.ndarray:
     return 2.0 * quat[1:4]
 
 
-class Go2FullStateEKF:
+class EKF:
     """
     Extended Kalman Filter for GO2 robot full state:
     - Base: position (3), velocity (3), orientation (quaternion), gyro bias (3)

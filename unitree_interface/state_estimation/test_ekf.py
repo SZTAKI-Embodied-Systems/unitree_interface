@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from unitree_interface.state_estimation.ekf import Go2FullStateEKF
+from unitree_interface.state_estimation.ekf import EKF
 
 
 def normalize_quat_wxyz(quat_wxyz):
@@ -43,7 +43,7 @@ def main():
     
     print(f"Total samples to process: {n}\n")
 
-    ekf = Go2FullStateEKF()
+    ekf = EKF()
 
     ekf.initialize(
         position=opti_position[0],
