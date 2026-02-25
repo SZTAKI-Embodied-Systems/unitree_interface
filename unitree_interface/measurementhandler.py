@@ -10,9 +10,9 @@ class MeasurementHandler:
     def __init__(self, robot_interface: UnitreeInterface,
                  localization_plugin_config: dict = None, 
                  use_ekf: bool = True,
-                 model_nq: int = 19,
-                 model_nv: int = 18,
-                 model_nu: int = 12):
+                 model_nq: int = None,
+                 model_nv: int = None,
+                 model_nu: int = None):
         self.robot_interface = robot_interface
         self.plugin_config = localization_plugin_config
 
