@@ -79,6 +79,8 @@ class UnitreeInterface(ABC):
         self.interp_total_step = 10
         self.interp_targets = None # Initialized in child class after total_joint_num is known
 
+        self.controlled_motor_ids = None # Set in child class
+
     @abstractmethod
     def Init(self):
         ''' Initialize the Unitree interface components '''
@@ -188,11 +190,15 @@ class UnitreeInterface(ABC):
 
     def getLowStateJointPos(self):
         ''' Get current joint positions from low state message '''
-        return [self.low_state_msg.motor_state[i].q for i in range(self.total_joint_num)]
+        return [self.low_state_msg.motor_state[i].q for i in self.controlled_motor_ids]
     
     def getLowStateJointVel(self):
         ''' Get current joint velocities from low state message '''
-        return [self.low_state_msg.motor_state[i].dq for i in range(self.total_joint_num)]
+        return [self.low_state_msg.motor_state[i].dq for i in self.controlled_motor_ids]
+    
+    def getLowStateTauEst(self):
+        ''' Get current joint torques from low state message '''
+        return [self.low_state_msg.motor_state[i].tau_est for i in self.controlled_motor_ids]
     
     def getLowStateImuGyroscope(self):
         ''' Get current IMU gyroscope data from low state message '''
