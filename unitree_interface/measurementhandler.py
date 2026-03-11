@@ -1,4 +1,5 @@
 import time
+from collections import deque
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -27,6 +28,19 @@ class MeasurementHandler:
         self.localization_plugin = load_plugin(self.plugin_config["localization_plugin"])
         self.localization_plugin = self.localization_plugin(self.plugin_config)
         self.localization_timeout_sec = self.plugin_config["localization_timeout_sec"]
+        self.moving_average_window = int(self.plugin_config.get("measurement_moving_average_window", 3))
+        if self.moving_average_window < 1:
+            self.moving_average_window = 1
+
+        self._ma_buffers = {
+            "opti_pos": deque(maxlen=self.moving_average_window),
+            "opti_vel": deque(maxlen=self.moving_average_window),
+            "opti_quat": deque(maxlen=self.moving_average_window),
+            "imu_gyro": deque(maxlen=self.moving_average_window),
+            "joint_pos": deque(maxlen=self.moving_average_window),
+            "joint_vel": deque(maxlen=self.moving_average_window),
+            "joint_tau": deque(maxlen=self.moving_average_window),
+        }
 
         self.raw_state_q = np.zeros(self.model_nq)
         self.raw_state_dq = np.zeros(self.model_nv)
@@ -34,6 +48,11 @@ class MeasurementHandler:
 
         self.filtered_state_q = np.zeros(self.model_nq)
         self.filtered_state_dq = np.zeros(self.model_nv)
+
+    def _moving_average(self, key, value):
+        arr = np.asarray(value, dtype=float)
+        self._ma_buffers[key].append(arr.copy())
+        return np.mean(np.asarray(self._ma_buffers[key]), axis=0)
 
     def process_measurements(self):
         localization_output = self.localization_plugin.get_state()
@@ -49,12 +68,26 @@ class MeasurementHandler:
         opti_base_pos = np.asarray(localization_output[:3], dtype=float)
         opti_base_vel = np.asarray(localization_output[7:10], dtype=float)
         opti_base_quat_wxyz = np.asarray(localization_output[3:7], dtype=float)
-        opti_base_quat_wxyz = opti_base_quat_wxyz / np.linalg.norm(opti_base_quat_wxyz)
 
         robot_base_ang_vel = self.robot_interface.getLowStateImuGyroscope()
         robot_joint_pos = self.robot_interface.getLowStateJointPos()
         robot_joint_vel = self.robot_interface.getLowStateJointVel()
         robot_joint_tau = self.robot_interface.getLowStateTauEst()
+
+        # Smooth raw measurements with a rolling moving-average window.
+        opti_base_pos = self._moving_average("opti_pos", opti_base_pos)
+        opti_base_vel = self._moving_average("opti_vel", opti_base_vel)
+        opti_base_quat_wxyz = self._moving_average("opti_quat", opti_base_quat_wxyz)
+        quat_norm = np.linalg.norm(opti_base_quat_wxyz)
+        if quat_norm > 1e-8:
+            opti_base_quat_wxyz = opti_base_quat_wxyz / quat_norm
+        else:
+            opti_base_quat_wxyz = np.array([1.0, 0.0, 0.0, 0.0])
+
+        robot_base_ang_vel = self._moving_average("imu_gyro", robot_base_ang_vel)
+        robot_joint_pos = self._moving_average("joint_pos", robot_joint_pos)
+        robot_joint_vel = self._moving_average("joint_vel", robot_joint_vel)
+        robot_joint_tau = self._moving_average("joint_tau", robot_joint_tau)
 
         if self.use_ekf:
             if self.last_ekf_time is None:
