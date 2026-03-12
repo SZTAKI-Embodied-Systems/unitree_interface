@@ -28,7 +28,7 @@ class MeasurementHandler:
         self.localization_plugin = load_plugin(self.plugin_config["localization_plugin"])
         self.localization_plugin = self.localization_plugin(self.plugin_config)
         self.localization_timeout_sec = self.plugin_config["localization_timeout_sec"]
-        self.moving_average_window = int(self.plugin_config.get("measurement_moving_average_window", 3))
+        self.moving_average_window = int(self.plugin_config.get("measurement_moving_average_window", 5))
         if self.moving_average_window < 1:
             self.moving_average_window = 1
 

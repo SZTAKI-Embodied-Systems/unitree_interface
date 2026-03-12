@@ -33,7 +33,7 @@ class OptiTrackDemo:
         # Low-pass filter parameters
         self.cutoff_freq = 5.0  # Cut-off frequency of the filter (Hz)
         self.filter_order = 2
-        self.fs = 100.0  # Sampling frequency (Hz)
+        self.fs = 120.0  # Sampling frequency (Hz)
         self.b, self.a = butter(
             self.filter_order, self.cutoff_freq / (0.5 * self.fs), btype="low"
         )
