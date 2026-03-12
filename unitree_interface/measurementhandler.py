@@ -68,42 +68,42 @@ class MeasurementHandler:
         opti_base_pos = np.asarray(localization_output[:3], dtype=float)
         opti_base_vel = np.asarray(localization_output[7:10], dtype=float)
         opti_base_quat_wxyz = np.asarray(localization_output[3:7], dtype=float)
+        opti_base_quat_wxyz = opti_base_quat_wxyz / np.linalg.norm(opti_base_quat_wxyz)
 
         robot_base_ang_vel = self.robot_interface.getLowStateImuGyroscope()
         robot_joint_pos = self.robot_interface.getLowStateJointPos()
         robot_joint_vel = self.robot_interface.getLowStateJointVel()
         robot_joint_tau = self.robot_interface.getLowStateTauEst()
 
-        # Smooth raw measurements with a rolling moving-average window.
-        opti_base_pos = self._moving_average("opti_pos", opti_base_pos)
-        opti_base_vel = self._moving_average("opti_vel", opti_base_vel)
-        opti_base_quat_wxyz = self._moving_average("opti_quat", opti_base_quat_wxyz)
-        quat_norm = np.linalg.norm(opti_base_quat_wxyz)
-        if quat_norm > 1e-8:
-            opti_base_quat_wxyz = opti_base_quat_wxyz / quat_norm
-        else:
-            opti_base_quat_wxyz = np.array([1.0, 0.0, 0.0, 0.0])
-
-        robot_base_ang_vel = self._moving_average("imu_gyro", robot_base_ang_vel)
-        robot_joint_pos = self._moving_average("joint_pos", robot_joint_pos)
-        robot_joint_vel = self._moving_average("joint_vel", robot_joint_vel)
-        robot_joint_tau = self._moving_average("joint_tau", robot_joint_tau)
-
         if self.use_ekf:
+            # Only smooth measurements when feeding the EKF.
+            ekf_opti_base_pos = self._moving_average("opti_pos", opti_base_pos)
+            ekf_opti_base_vel = self._moving_average("opti_vel", opti_base_vel)
+            ekf_opti_base_quat_wxyz = self._moving_average("opti_quat", opti_base_quat_wxyz)
+            quat_norm = np.linalg.norm(ekf_opti_base_quat_wxyz)
+            if quat_norm > 1e-8:
+                ekf_opti_base_quat_wxyz = ekf_opti_base_quat_wxyz / quat_norm
+            else:
+                ekf_opti_base_quat_wxyz = np.array([1.0, 0.0, 0.0, 0.0])
+
+            ekf_robot_base_ang_vel = self._moving_average("imu_gyro", robot_base_ang_vel)
+            ekf_robot_joint_pos = self._moving_average("joint_pos", robot_joint_pos)
+            ekf_robot_joint_vel = self._moving_average("joint_vel", robot_joint_vel)
+
             if self.last_ekf_time is None:
                 self.ekf.initialize(
-                    position=opti_base_pos,
-                    velocity=opti_base_vel,
-                    quat_wxyz=opti_base_quat_wxyz,
-                    joint_pos=robot_joint_pos,
-                    joint_vel=robot_joint_vel,
+                    position=ekf_opti_base_pos,
+                    velocity=ekf_opti_base_vel,
+                    quat_wxyz=ekf_opti_base_quat_wxyz,
+                    joint_pos=ekf_robot_joint_pos,
+                    joint_vel=ekf_robot_joint_vel,
                 )
                 self.last_ekf_time = now
             else:
                 dt = max(1e-4, min(0.05, now - self.last_ekf_time))
-                self.ekf.predict(gyro_body=robot_base_ang_vel, dt=dt)
-                self.ekf.update_optitrack(position=opti_base_pos, velocity=opti_base_vel, quat_wxyz=opti_base_quat_wxyz)
-                self.ekf.update_joints(joint_pos=robot_joint_pos, joint_vel=robot_joint_vel)
+                self.ekf.predict(gyro_body=ekf_robot_base_ang_vel, dt=dt)
+                self.ekf.update_optitrack(position=ekf_opti_base_pos, velocity=ekf_opti_base_vel, quat_wxyz=ekf_opti_base_quat_wxyz)
+                self.ekf.update_joints(joint_pos=ekf_robot_joint_pos, joint_vel=ekf_robot_joint_vel)
                 self.last_ekf_time = now
 
             filt_base_pos, filt_base_vel, filt_base_quat_wxyz, gyro_bias, filt_joint_pos, filt_joint_vel = self.ekf.get_state()
